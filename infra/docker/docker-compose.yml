@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # Banco de Dados da Autenticação
+  postgres-auth:
+    image: postgres:16-alpine
+    container_name: polydraw-db-auth
+    environment:
+      POSTGRES_DB: polydraw_auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+
+  # Banco de Dados dos Projetos CAD (Suporte a JSONB)
+  postgres-project:
+    image: postgres:16-alpine
+    container_name: polydraw-db-project
+    environment:
+      POSTGRES_DB: polydraw_project_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5433:5432"
+
+  # Broker de Mensagens para Fila de Renderização
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: polydraw-rabbitmq
+    ports:
+      - "5672:5672"   # Porta do protocolo AMQP
+      - "15672:15672" # Painel de Gestão Web (http://localhost:15672)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
