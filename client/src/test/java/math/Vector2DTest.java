@@ -61,4 +61,14 @@ public class Vector2DTest {
                 vector::normalize
         );
     }
+
+    @Test
+    void shouldCalculateDot() {
+        Vector2D a = new Vector2D(2, 3);
+        Vector2D b = new Vector2D(4, 1);
+
+        double result = a.dot(b);
+
+        assertEquals(11, result, 0.0001);
+    }
 }

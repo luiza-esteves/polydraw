@@ -47,5 +47,9 @@ public class Vector2D {
         );
     }
 
+    public double dot(Vector2D b){
+        return this.x*b.x + this.y *b.y;
+    }
+
 
 }
