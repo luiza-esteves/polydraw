@@ -4,6 +4,7 @@
 ![Java 21](https://img.shields.io/badge/Java-21-orange?style=flat&logo=openjdk)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.x-brightgreen?style=flat&logo=springboot)
 ![Docker](https://img.shields.io/badge/Docker-Containers-blue?style=flat&logo=docker)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-Helm-326CE5?style=flat&logo=kubernetes)
 ![AWS](https://img.shields.io/badge/AWS-EC2_%7C_S3-FF9900?style=flat&logo=amazon-aws)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
@@ -22,54 +23,46 @@ O projeto aplica o princípio da **separação de responsabilidades**: a baixa l
 ## 🏗️ Arquitetura do Sistema
 
 ```text
-                           ┌────────────────────────┐
-                           │   GitHub Repository    │
-                           │      (Monorepo)        │
-                           └───────────┬────────────┘
-                                       │ Push Git Tag (v1.0.0)
-                                       ▼
-                           ┌────────────────────────┐
-                           │  GitHub Actions CI/CD  │
-                           └───────────┬────────────┘
-                                       │ Build & Push Containers
-                                       ▼
-                           ┌────────────────────────┐
-                           │  GitHub Registry GHCR  │
-                           └───────────┬────────────┘
-                                       │ SSH / Pull Images
-                                       ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│ AWS EC2 Instance (t2.micro)                                               │
-│                                                                           │
-│  ┌────────────────────────┐       ┌──────────────────────────┐            │
-│  │ Client (JavaFX CAD App)│──────>│   Spring Cloud Gateway   │            │
-│  └────────────────────────┘       │       (Porta 8080)       │            │
-│                                   └────────────┬─────────────┘            │
-│                                                │                          │
-│          ┌─────────────────────────────────────┼──────────────────────┐   │
-│          │                                     │                      │   │
-│ ┌────────▼───────────┐            ┌────────────▼─────────┐   ┌────────▼─┐ │
-│ │ Auth Service       │            │ Project Service      │   │PostgreSQL│ │
-│ └────────┬───────────┘            └────────────┬─────────┘   └──────────┘ │
-│          │                                     │                          │
-│          │                            (Event)  │                          │
-│          │                                     ▼                          │
-│ ┌────────▼───────────┐            ┌──────────────────────┐                │
-│ │ PostgreSQL (Auth DB)│            │  RabbitMQ Broker     │                │
-│ └────────────────────┘            └────────────┬─────────┘                │
-│                                                │                          │
-│                                                ▼                          │
-│                                   ┌──────────────────────┐                │
-│                                   │ Render Worker Service│                │
-│                                   └────────────┬─────────┘                │
-└────────────────────────────────────────────────┼──────────────────────────┘
-                                                 │ AWS SDK Upload
-                                                 ▼
-                                    ┌──────────────────────┐
-                                    │    AWS S3 Bucket     │
-                                    └──────────────────────┘
-
+ ┌──────────────────────┐        ┌────────────────────────┐
+ │  GitHub (Monorepo)   │──push─>│  GitHub Actions CI/CD  │  build · testes · scan (Trivy)
+ └──────────────────────┘        └───────────┬────────────┘
+                                             │ push de imagens (tag do commit + SemVer)
+                                             ▼
+                                 ┌────────────────────────┐
+                                 │  GitHub Registry GHCR  │
+                                 └───────────┬────────────┘
+                                             │ pull de imagens
+ Máquina do usuário                          ▼
+┌──────────────────────┐   ┌───────────────────────────────────────────────────────────────┐
+│ Client (JavaFX CAD)  │   │ Ambiente de execução: Compose local → Kubernetes (kind → k3s) │
+│  app desktop, fora   │   │                                                               │
+│  do cluster          │──>│               ┌──────────────────────────┐                    │
+└──────────────────────┘   │               │   Spring Cloud Gateway   │  (só roteia)       │
+        HTTPS / JWT        │               │       (Porta 8080)       │                    │
+                           │               └─────┬──────────────┬─────┘                    │
+                           │                     │              │                          │
+                           │       ┌─────────────▼──────┐ ┌─────▼────────────────┐         │
+                           │       │   Auth Service     │ │   Project Service    │         │
+                           │       └─────────┬──────────┘ └──┬──────────────┬────┘         │
+                           │                 │               │              │ (evento)     │
+                           │       ┌─────────▼──────────┐ ┌──▼───────────┐ ┌▼───────────┐  │
+                           │       │ PostgreSQL (Auth)  │ │ PostgreSQL   │ │  RabbitMQ  │  │
+                           │       └────────────────────┘ │ (Projects)   │ └─────┬──────┘  │
+                           │                              └──────────────┘       │         │
+                           │                                     ┌───────────────▼──────┐  │
+                           │                                     │ Render Worker Service│  │
+                           │                                     └───────────┬──────────┘  │
+                           └─────────────────────────────────────────────────┼─────────────┘
+                                                                             │ AWS SDK
+                                                                             ▼
+                                                                  ┌──────────────────────┐
+                                                                  │    AWS S3 Bucket     │
+                                                                  └──────────────────────┘
 ```
+
+* O **cliente JavaFX** é uma aplicação desktop: roda na máquina do usuário e conversa com o Gateway pela rede. Ele não é conteinerizado.
+* O **Gateway** apenas roteia e valida tokens; cada serviço acessa o seu próprio banco.
+* Os bancos e o broker ficam em rede interna, sem exposição pública.
 
 ---
 
@@ -92,20 +85,35 @@ O projeto aplica o princípio da **separação de responsabilidades**: a baixa l
 
 * **GitHub Actions:** Esteira de CI/CD automatizada para execução de testes unitários, compilação paralela e verificação *fail-fast*.
 * **Docker & Docker Compose:** Contenerização multi-stage e orquestração do ambiente de desenvolvimento local e produção.
-* **AWS (EC2 & S3):** Hospedagem em nuvem da infraestrutura de containers e armazenamento de objetos para entrega das imagens renderizadas.
+* **Kubernetes (kind / k3s) & Helm:** Orquestração com Deployments, StatefulSets, probes, NetworkPolicy, RBAC e empacotamento em charts.
+* **Argo CD:** Entrega contínua no modelo GitOps.
+* **Trivy:** Varredura de vulnerabilidades das imagens no pipeline.
+* **AWS (EC2 & S3) & Terraform:** Infraestrutura em nuvem de curta duração (ligada só durante os testes) e armazenamento de objetos para as imagens renderizadas.
 * **Semantic Versioning (SemVer) & Git Tags:** Controle de releases automatizado (`v0.1.0-alpha`, `v1.0.0`) com geração automática de *Changelogs* no GitHub Releases.
 
 ---
 
 ## 🚀 Roadmap de Evolução & Releases
 
-O projeto está sendo desenvolvido em **5 fases graduais**, utilizando o modelo de branches *Feature Branch Workflow*:
+O roadmap foi reorganizado para que **cada versão corresponda a uma unidade da disciplina de containers**. O backend é o laboratório de DevOps; o cliente gráfico evolui numa trilha paralela, sem bloquear as entregas.
 
-* [x] **v0.1.0-alpha — Setup de Arquitetura & Monorepo:** Estruturação da hierarquia do repositório, Docker Compose local e pipeline inicial de CI/CD.
-* [ ] **v0.2.0-beta — Motor Gráfico 2D & Álgebra Linear:** Implementação do motor gráfico em Java (vetores, matrizes, transformações afins e exportação JSON do Scene Graph).
-* [ ] **v0.3.0-rc — Monólito Spring Boot & Persistência SQL:** Criação da API REST para salvamento e leitura de projetos com Spring Security (JWT) e PostgreSQL (`JSONB`).
-* [ ] **v1.0.0 — Migração para Microsserviços, CI/CD & Deploy na AWS:** Separação dos serviços via Spring Cloud Gateway, publicação de containers imutáveis no GHCR e deploy automatizado via SSH na instância AWS EC2.
-* [ ] **v1.1.0 — Worker Assíncrono de Renderização & AWS S3:** Fila de tarefas com RabbitMQ para renderização em background e upload automático da mídia gerada para o AWS S3.
+* [ ] **v0.1 — Base que funciona:** CI verde com Maven Wrapper; Compose corrigido (volumes nomeados, healthchecks, `.env`, portas em `127.0.0.1`).
+* [ ] **v0.2 — Um serviço bem conteinerizado:** `project-service` (CRUD com PostgreSQL); Dockerfile multi-stage, usuário não-root, imagem enxuta, Spring Actuator; CI com scan Trivy e publicação no GHCR (tag do commit + SemVer).
+* [ ] **v0.3 — Microsserviços no Compose:** `gateway`, `auth-service` e evento para o RabbitMQ; bancos em rede `internal`; `depends_on` com `condition: service_healthy`.
+* [ ] **v0.4 — Kubernetes local (kind):** Deployments, Services, ConfigMap e Secret; PostgreSQL como StatefulSet com PVC; probes de liveness/readiness via Actuator; requests e limits; Ingress ou Gateway API.
+* [ ] **v0.5 — Segurança no cluster:** NetworkPolicy *default-deny*; ServiceAccount com RBAC mínimo para o worker; Pod Security `restricted`.
+* [ ] **v0.6 — Helm e GitOps:** chart dos serviços com `values-dev.yaml` e `values-prod.yaml`; Argo CD sincronizando a partir do Git.
+* [ ] **v1.0 — Nuvem:** k3s numa EC2 maior (ligada só durante os testes) ou cluster gerenciado de curta duração via Terraform; `render-worker` gravando no S3.
+
+**Trilha paralela — Cliente gráfico:** motor 2D em Java (`Vector2D`, `Matrix3x3`, transformações afins, Scene Graph com exportação JSON) e interface JavaFX. Até lá, os serviços são testados com `curl`.
+
+---
+
+## ⚠️ Problemas Conhecidos
+
+* **CI:** o workflow usa `mvn` em vez de `./mvnw` e o Maven Wrapper ainda não está versionado em `client/`; o `chmod +x ./mvnw || true` mascara essa ausência.
+* **Compose:** usa o atributo obsoleto `version`, não tem volumes nomeados nem healthchecks, publica as portas dos bancos em todas as interfaces e mantém senhas fixas no arquivo.
+* **Dimensionamento:** uma EC2 `t2.micro` (1 GB de RAM) não comporta quatro JVMs Spring Boot, dois PostgreSQL e um RabbitMQ — os containers seriam finalizados por OOM (código 137).
 
 ---
 
@@ -123,9 +131,11 @@ polydraw/
 │   ├── project-service/           # CRUD de projetos e emissão de eventos (Spring Boot)
 │   └── render-worker/             # Consumidor RabbitMQ e renderizador (Spring Boot)
 ├── infra/
-│   └── docker/
-│       ├── docker-compose.yml     # Ambiente de desenvolvimento local
-│       └── docker-compose.prod.yml# Infraestrutura de deploy na AWS
+│   ├── docker/
+│   │   ├── docker-compose.yml     # Ambiente de desenvolvimento local
+│   │   └── .env.example           # Variáveis de ambiente (copiar para .env)
+│   ├── k8s/                       # Manifests Kubernetes (v0.4+)
+│   └── helm/                      # Chart Helm (v0.6+)
 ├── LICENSE
 └── README.md
 
@@ -143,7 +153,7 @@ polydraw/
 ### 1. Clonar o Repositório
 
 ```bash
-git clone [https://github.com/luiza-esteves/polydraw.git](https://github.com/luiza-esteves/polydraw.git)
+git clone https://github.com/luiza-esteves/polydraw.git
 cd polydraw
 
 ```
@@ -160,14 +170,15 @@ docker compose -f infra/docker/docker-compose.yml up -d
 ```bash
 cd client
 ./mvnw clean test
-
 ```
+
+> Enquanto o Maven Wrapper não estiver versionado (ver *Problemas Conhecidos*), use `mvn clean test` com um Maven local.
 
 ---
 
 ## 📄 Licença
 
-Este projeto está sob a licença MIT - veja o arquivo [LICENSE](https://www.google.com/search?q=LICENSE) para mais detalhes.
+Este projeto está sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para mais detalhes.
 
 ---
 
