@@ -16,7 +16,7 @@ jobs:
     name: Build e Testes Unitários
     runs-on: ubuntu-latest
 
-    # onde o comando maven vai rodar mono repo
+    # os comandos rodam dentro do módulo client
     defaults:
       run:
         working-directory: ./client
@@ -32,14 +32,8 @@ jobs:
           java-version: '21'
           cache: 'maven'
 
-      - name: Dar permissão ao Maven Wrapper
-        run: chmod +x ./mvnw || true
-
       - name: Baixar dependências do Maven
-        run: mvn dependency:go-offline
+        run: ./mvnw -B dependency:go-offline
 
-      - name: Executar Testes Unitários
-        run: mvn test
-
-      - name: Empacotar Aplicação (Build Final)
-        run: mvn package -DskipTests
+      - name: Build, testes e empacotamento
+        run: ./mvnw -B verify
