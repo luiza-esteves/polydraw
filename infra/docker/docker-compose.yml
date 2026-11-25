@@ -9,7 +9,9 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
     ports:
-      - "5432:5432"
+        - "5432:5432"
+    volumes:
+        - auth-volume:/var/lib/postgresql/data
 
   # Banco de Dados dos Projetos CAD (Suporte a JSONB)
   postgres-project:
@@ -20,15 +22,25 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
     ports:
-      - "5433:5432"
+        - "5433:5432"
+    volumes:
+        - project-volume:/var/lib/postgresql/data
 
   # Broker de Mensagens para Fila de Renderização
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: polydraw-rabbitmq
     ports:
-      - "5672:5672"   # Porta do protocolo AMQP
-      - "15672:15672" # Painel de Gestão Web (http://localhost:15672)
+        - "5672:5672"   # Porta do protocolo AMQP
+        - "15672:15672" # Painel de Gestão Web (http://localhost:15672)
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+    hostname: rabbitmq
+    volumes:
+        - rabbitmq-volume:/var/lib/rabbitmq
+
+volumes:          
+  auth-volume:
+  project-volume:
+  rabbitmq-volume:
