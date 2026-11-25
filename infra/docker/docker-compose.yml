@@ -1,5 +1,4 @@
-version: '3.8'
-
+name: polydraw
 services:
   # Banco de Dados da Autenticação
   postgres-auth:
