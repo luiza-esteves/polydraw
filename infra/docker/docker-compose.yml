@@ -2,15 +2,15 @@ name: polydraw
 services:
   # Banco de Dados da Autenticação
   postgres-auth:
-    image: postgres:16-alpine
-    container_name: polydraw-db-auth
-    environment:
-      POSTGRES_DB: polydraw_auth_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-    ports:
+      image: postgres:16-alpine
+      container_name: polydraw-db-auth
+      environment:
+        POSTGRES_DB: ${AUTH_DB:?Defina AUTH_DB no arquivo .env}
+        POSTGRES_USER: ${AUTH_USER:?Defina AUTH_USER no arquivo .env}
+        POSTGRES_PASSWORD: ${AUTH_PASSWORD:?Defina AUTH_PASSWORD no arquivo .env}
+      ports:
         - "127.0.0.1:5432:5432"
-    volumes:
+      volumes:
         - auth-volume:/var/lib/postgresql/data
 
   # Banco de Dados dos Projetos CAD (Suporte a JSONB)
@@ -18,9 +18,9 @@ services:
     image: postgres:16-alpine
     container_name: polydraw-db-project
     environment:
-      POSTGRES_DB: polydraw_project_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+        POSTGRES_DB: ${PROJECT_DB:?Defina PROJECT_DB no arquivo .env}
+        POSTGRES_USER: ${PROJECT_USER:?Defina PROJECT_USER no arquivo .env}
+        POSTGRES_PASSWORD: ${PROJECT_PASSWORD:?Defina PROJECT_PASSWORD no arquivo .env}
     ports:
         - "127.0.0.1:5433:5432"
     volumes:
@@ -34,8 +34,8 @@ services:
         - "127.0.0.1:5672:5672"   # Porta do protocolo AMQP
         - "127.0.0.1:15672:15672" # Painel de Gestão Web (http://localhost:15672)
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+        RABBITMQ_DEFAULT_USER: ${RABBIT_USER:?Defina RABBIT_USER no arquivo .env}
+        RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:?Defina RABBIT_PASSWORD no arquivo .env}
     hostname: rabbitmq
     volumes:
         - rabbitmq-volume:/var/lib/rabbitmq
