@@ -12,6 +12,11 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - auth-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_USER} -d ${AUTH_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
   # Banco de Dados dos Projetos CAD (Suporte a JSONB)
   postgres-project:
@@ -25,6 +30,11 @@ services:
       - "127.0.0.1:5433:5432"
     volumes:
       - project-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PROJECT_USER} -d ${PROJECT_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
   # Broker de Mensagens para Fila de Renderização
   rabbitmq:
@@ -39,6 +49,12 @@ services:
     hostname: rabbitmq
     volumes:
       - rabbitmq-volume:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      start_period: 30s
+      interval: 20s
+      timeout: 10s
+      retries: 3
 
 volumes:
   auth-volume:
