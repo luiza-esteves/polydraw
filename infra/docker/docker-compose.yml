@@ -1,35 +1,62 @@
-version: '3.8'
-
+name: polydraw
 services:
   # Banco de Dados da Autenticação
   postgres-auth:
     image: postgres:16-alpine
     container_name: polydraw-db-auth
     environment:
-      POSTGRES_DB: polydraw_auth_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: ${AUTH_DB:?Defina AUTH_DB no arquivo .env}
+      POSTGRES_USER: ${AUTH_USER:?Defina AUTH_USER no arquivo .env}
+      POSTGRES_PASSWORD: ${AUTH_PASSWORD:?Defina AUTH_PASSWORD no arquivo .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - auth-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_USER} -d ${AUTH_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
   # Banco de Dados dos Projetos CAD (Suporte a JSONB)
   postgres-project:
     image: postgres:16-alpine
     container_name: polydraw-db-project
     environment:
-      POSTGRES_DB: polydraw_project_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: ${PROJECT_DB:?Defina PROJECT_DB no arquivo .env}
+      POSTGRES_USER: ${PROJECT_USER:?Defina PROJECT_USER no arquivo .env}
+      POSTGRES_PASSWORD: ${PROJECT_PASSWORD:?Defina PROJECT_PASSWORD no arquivo .env}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - project-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PROJECT_USER} -d ${PROJECT_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
   # Broker de Mensagens para Fila de Renderização
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:4-management-alpine
     container_name: polydraw-rabbitmq
     ports:
-      - "5672:5672"   # Porta do protocolo AMQP
-      - "15672:15672" # Painel de Gestão Web (http://localhost:15672)
+      - "127.0.0.1:5672:5672"   # Porta do protocolo AMQP
+      - "127.0.0.1:15672:15672" # Painel de Gestão Web (http://localhost:15672)
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER:?Defina RABBIT_USER no arquivo .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:?Defina RABBIT_PASSWORD no arquivo .env}
+    hostname: rabbitmq
+    volumes:
+      - rabbitmq-volume:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      start_period: 30s
+      interval: 20s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  auth-volume:
+  project-volume:
+  rabbitmq-volume:
