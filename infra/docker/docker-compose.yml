@@ -38,7 +38,7 @@ services:
 
   # Broker de Mensagens para Fila de Renderização
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:4-management-alpine
     container_name: polydraw-rabbitmq
     ports:
       - "127.0.0.1:5672:5672"   # Porta do protocolo AMQP
